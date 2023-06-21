@@ -223,6 +223,9 @@ class TemporalConvTran(nn.Module):
         dim_ff = config['dim_ff']
         # Embedding Layer -----------------------------------------------------------
         # input data should have a shape of (batch_size, time, channel_size) each batch is the data from a grid point
+        
+        #input shape for conv2d is batch_size, input_channels, height, width. ignore input channels. it is already one
+        #shape of their input is batch_size, sequence_len, feature_size
         self.embed_layer = nn.Sequential(nn.Conv2d(1, emb_size*4, kernel_size=[1, 8], padding='same'),
                                          nn.BatchNorm2d(emb_size*4),
                                          nn.GELU())
