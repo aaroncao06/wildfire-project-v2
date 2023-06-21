@@ -61,10 +61,10 @@ if __name__ == '__main__':
     feature_names = ['tp', 'rel_hum', 'ws10', 't2m_mean', 't2m_min', 't2m_max', 'swvl1', 'swvl2', 'swvl3', 'swvl4', 'lsm',
                      'drought_code_max', 'drought_code_mean', 'fwi_max', 'fwi_mean', 'lst_day', 'lai', 'ndvi', 'pop_dens',
                      'lccs_class_0', 'lccs_class_1', 'lccs_class_2', 'lccs_class_3', 'lccs_class_4', 'lccs_class_5', 'lccs_class_6', 'lccs_class_7', 'lccs_class_8']
-    target_name = ['']
+    target_name = ['fcci_ba']
     lat_size = 4
     lon_size = 4
-    time_size = 322
+    time_size = 322 # a third of total time
     sequence_length = 64 #look up to 512 days back
     
     #def temporal_dataloader(dataset, feature_names, target_name, lat_size, lon_size, time_size, sequence_length, shuffle=True, num_workers=0):

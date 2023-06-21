@@ -40,11 +40,13 @@ def temporal_dataloader(dataset, feature_names, target_name, lat_size, lon_size,
                         features_tensor = torch.from_numpy(features.to_array().values)
                         
                         #has shape (lat_size, lon_size, 1, 1) because one time index and one target variable
+                        #FIX
                         target = dataset.isel(latitude=sample_indices_d1,longitude=sample_indices_d2,time=sample_indices_d3[i+sequence_length])[target_name] #the value the next timestep after, shape latsize, lonsize, timesize, targetsize
+                        target = target.stack(samples=("latitude", "longitude")) #combine dimensions again
                         print(target)
                         print(target.to_array().values)
-                        target = target.stack(samples=("latitude", "longitude")) #combine dimensions again
                         target_tensor = torch.from_numpy(target.to_array().values)[:,0,:] #remove the time dimension because only one time index for one target
+                        print(target_tensor)
                         yield features_tensor, target_tensor 
                     
 
