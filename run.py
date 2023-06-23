@@ -15,6 +15,7 @@ from models import RAdam
 from dataloader import temporal_dataloader
 from models import TemporalConvTran
 from train import train
+from train import evaluate_model
 
 
 
@@ -54,17 +55,19 @@ if __name__ == '__main__':
     
     dataset = xr.open_dataset(Path.home() / 'Documents/Wildfire Project/california_dataset.zarr', engine='zarr') #xarray
     total_timesteps = dataset.sizes['time']
-    train_test_ratio = 0.75
-    ratio_index = int(3 * total_timesteps // 4)
-    train_dataset = dataset.isel(time=slice(None, ratio_index))
-    test_dataset = dataset.isel(time=slice(ratio_index, None))
+    train_test_ratio = 3/4
+    num_for_training = int(train_test_ratio * total_timesteps)
+    train_dataset = dataset.isel(time=slice(None, num_for_training))
+    test_dataset = dataset.isel(time=slice(num_for_training, None))
     feature_names = ['tp', 'rel_hum', 'ws10', 't2m_mean', 't2m_min', 't2m_max', 'swvl1', 'swvl2', 'swvl3', 'swvl4', 'lsm',
                      'drought_code_max', 'drought_code_mean', 'fwi_max', 'fwi_mean', 'lst_day', 'lai', 'ndvi', 'pop_dens',
                      'lccs_class_0', 'lccs_class_1', 'lccs_class_2', 'lccs_class_3', 'lccs_class_4', 'lccs_class_5', 'lccs_class_6', 'lccs_class_7', 'lccs_class_8']
     target_name = ['fcci_ba']
-    lat_size = 4
-    lon_size = 4
-    time_size = 322 # a third of total time
+    # total ds dimensions: 40/40/920
+    lat_size = 20
+    lon_size = 20
+    #time_size = 161 # a fourth of training time
+    time_size = num_for_training
     sequence_length = 64 #look up to 512 days back
     
     #def temporal_dataloader(dataset, feature_names, target_name, lat_size, lon_size, time_size, sequence_length, shuffle=True, num_workers=0):
@@ -74,7 +77,7 @@ if __name__ == '__main__':
     # -------------------------------------------- Build Model -----------------------------------------------------
 
     logger.info("Creating model ...")
-    config['Data_shape'] = [16, len(feature_names), sequence_length]
+    config['Data_shape'] = [16, sequence_length, len(feature_names)]
     config['num_labels'] = 1
     # config for model needs 'Data_shape', 'emb_size', 'num_heads', 'dim_ff', all have default vals except for data_shape
     model = TemporalConvTran(config, num_classes=config['num_labels'])
@@ -87,7 +90,9 @@ if __name__ == '__main__':
     model.to(device)
     # ---------------------------------------------- Training The Model ------------------------------------
     
-    num_epochs = 10
+    num_epochs = 20
     for epoch in range(num_epochs):
         train_loss, train_acc = train(model, training_dataloader, optimizer, criterion, device)
         print(f'Epoch {epoch+1}/{num_epochs} - Train Loss: {train_loss:.4f} - Train Accuracy: {train_acc:.2f}%')
+        f1, precision, accuracy, recall, auc_roc = evaluate_model(model, test_dataloader, device)
+        print(f1, precision, accuracy, recall, auc_roc)

@@ -20,35 +20,41 @@ def temporal_dataloader(dataset, feature_names, target_name, lat_size, lon_size,
     batch_indices_dim1 = [indices_dim1[i:i + batch_size[0]] for i in range(0, total_lat_size, batch_size[0])]
     batch_indices_dim2 = [indices_dim2[i:i + batch_size[1]] for i in range(0, total_lon_size, batch_size[1])]
     batch_indices_dim3 = [indices_dim3[i:i + batch_size[2]] for i in range(0, total_time_size, batch_size[2])]
-
+    
     if shuffle: #shuffle batch time indices while maintaining temporal relationships within each batch
         np.random.shuffle(batch_indices_dim3)
 
     # Define a generator function to yield batches
     def generator():
+        num_batches=0
         #feature output tensor needs dimensions (batch_size, sequence_length, len(feature_names)) where batch_size=lat_size*lon_size. ignore padding for convolutions for now
         #target output tensor needs dimensions (batch_size, 1) because we only have one target variable to predict
         for sample_indices_d1 in batch_indices_dim1: #each batch_index is the list of individual indices within that batch
             for sample_indices_d2 in batch_indices_dim2: #lon
                 for sample_indices_d3 in batch_indices_dim3: #time
-                    for i, _ in enumerate(sample_indices_d3[0:time_size-sequence_length-1]): #create time series, sequence_length+1 is number of timesteps looked at for feature and targets combined
+                    for i, _ in enumerate(sample_indices_d3[:time_size-sequence_length-1]): #create time series, sequence_length+1 is number of timesteps looked at for feature and targets combined
                         
+                        #has shape (lat_size, lon_size, 1, 1) because one time index and one target variable
+                        target = dataset.isel(latitude=sample_indices_d1,longitude=sample_indices_d2,time=sample_indices_d3[i+sequence_length])[target_name] #the value the next timestep after, shape latsize, lonsize, timesize, targetsize
+                        target = target.stack(samples=("latitude", "longitude")) #combine dimensions again
+                        mask = np.isnan(target.fcci_ba.values)
+                        target = target.sel(samples=~mask)
+                        target_np = np.moveaxis(target.to_array().values, 0, -1)
+                        # np.shape(target_np)) should by 100 by 1
+                        target_tensor = torch.from_numpy(target_np)
+                        
+
                         #has shape (lat_size, lon_size, sequence_length, len(feature_names))
                         features = dataset.isel(latitude=sample_indices_d1,longitude=sample_indices_d2,time=sample_indices_d3[i:i+sequence_length])[feature_names] #shape latsize, lonsize, sequence_length, featuresize
                         features = features.stack(samples=("latitude", "longitude")) #combine dimensions. now it is batch size, time, features where batch size is lat*lon
-                        #print(features.to_array().values.shape) 28 by 64 by 16
-                        features_tensor = torch.from_numpy(features.to_array().values)
-                        
-                        #has shape (lat_size, lon_size, 1, 1) because one time index and one target variable
-                        #FIX
-                        target = dataset.isel(latitude=sample_indices_d1,longitude=sample_indices_d2,time=sample_indices_d3[i+sequence_length])[target_name] #the value the next timestep after, shape latsize, lonsize, timesize, targetsize
-                        target = target.stack(samples=("latitude", "longitude")) #combine dimensions again
-                        print(target)
-                        print(target.to_array().values)
-                        target_tensor = torch.from_numpy(target.to_array().values)[:,0,:] #remove the time dimension because only one time index for one target
-                        print(target_tensor)
+                        #shape should be batch_size, sequence_len, feature_size: 100 x 64 x 28
+                        features = features.transpose('samples', 'time')
+                        features = features.sel(samples=~mask)
+                        features_np = np.moveaxis(features.to_array().values,0,-1) # move features dimension to last
+                        features_tensor = torch.from_numpy(features_np)
+                                                
                         yield features_tensor, target_tensor 
+                        
                     
-
     # Return an iterator that yields batches
     return iter(generator())

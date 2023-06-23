@@ -8,6 +8,7 @@ import torch
 from torch.optim.optimizer import Optimizer
 import pandas as pd
 from einops import rearrange
+from torch.nn import functional as F
 
 #from Models.AbsolutePositionalEncoding import tAPE, AbsolutePositionalEncoding, LearnablePositionalEncoding
 #from Models.Attention import Attention, Attention_Rel_Scl, Attention_Rel_Vec
@@ -19,6 +20,10 @@ def get_optimizer(name):
     elif name == "RAdam":
         return RAdam
     
+class Permute(nn.Module):
+    def forward(self, x):
+        return x.permute(1, 0, 2)
+
 # from https://github.com/LiyuanLucasLiu/RAdam/blob/master/radam/radam.py
 class RAdam(Optimizer):
 
@@ -251,19 +256,40 @@ class TemporalConvTran(nn.Module):
         self.gap = nn.AdaptiveAvgPool1d(1)
         self.flatten = nn.Flatten()
         self.out = nn.Linear(emb_size, num_classes)
+        self.out_binary = nn.Sigmoid()
+        
 
     def forward(self, x):
-        x = x.unsqueeze(1)
+        #shape of their input x is batch_size, sequence_len, feature_size
+        #print(x.size())
+        #shape = x.size()
+        x = x.unsqueeze(1) #now it is batch_size, 1, sequence_len, feature_size where the 1 is how many channels for the conv2d in first embed
+        #shape = x.size()
         x_src = self.embed_layer(x)
-        x_src = self.embed_layer2(x_src).squeeze(2)
+        #shape = x_src.size()
+        x_src = self.embed_layer2(x_src)
+        #shape = x_src.size()
+        x_src = x_src.squeeze(2)
+        #shape = x_src.size()
         x_src = x_src.permute(0, 2, 1)
+        #shape = x_src.size()
         x_src_pos = self.Fix_Position(x_src)
+        #shape = x_src_pos.size()
         att = x_src + self.attention_layer(x_src_pos)
+        #shape = att.size()
         att = self.LayerNorm(att)
+        #shape = att.size()
         out = att + self.FeedForward(att)
+        #shape = out.size()
         out = self.LayerNorm2(out)
+        #shape = out.size()
         out = out.permute(0, 2, 1)
+        #shape = out.size()
         out = self.gap(out)
+        #shape = out.size()
         out = self.flatten(out)
+        #shape = out.size()
         out = self.out(out)
+        #shape = out.size()
+        out = self.out_binary(out)
         return out
